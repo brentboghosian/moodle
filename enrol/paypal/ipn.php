@@ -366,7 +366,8 @@ function enrol_paypal_ipn_exception_handler($ex) {
 
 /**
  * Compare version strings of for: ###.###.###A
- *
+ * @param string $testversion the version string to test.
+ * @param string $baseversion the base version to compare the testversion against.
  * @return int 0 if versions are equal, -1 if testversion is less than base version,
  *         1 if testversion is greater than baseversion.
  */
@@ -396,7 +397,7 @@ function enrol_paypal_get_tls_version($sslversion) {
         'nss'               => ['1.2' => '3.15'],
         'gnu'               => ['1.2' => '1.7.1'],
         'wolf'              => ['1.2' => '1.1.0'],
-        'cyn'               => ['1.2' => '1.1.0'],
+        'cya'               => ['1.2' => '1.1.0'],
         'qso'               => ['1.2' => '7.1'],
         'polar'             => ['1.2' => '1.2'],
         'mbed'              => ['1.2' => '1.3.8'],
