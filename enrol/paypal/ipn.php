@@ -96,15 +96,19 @@ $plugin = enrol_get_plugin('paypal');
 
 /// Open a connection back to PayPal to validate the data
 $paypaladdr = empty($CFG->usepaypalsandbox) ? 'www.paypal.com' : 'www.sandbox.paypal.com';
-$curlinfo = curl_version();
 $c = new curl();
 $options = array(
     'returntransfer' => true,
     'httpheader' => array('application/x-www-form-urlencoded', "Host: $paypaladdr"),
     'timeout' => 30,
     'CURLOPT_HTTP_VERSION' => CURL_HTTP_VERSION_1_1,
-    'CURLOPT_SSLVERSION' => ((float)$curlinfo['version'] >= 7.34) ? CURL_SSLVERSION_TLSv1_2 : CURL_SSLVERSION_TLSv1
 );
+$curlinfo = curl_version();
+$sslversion = $curlinfo['ssl_version'];
+$ssltlsversion = enrol_paypal_get_tls_version($sslversion);
+if ($ssltlsversion !== false) {
+    $options['CURLOPT_SSLVERSION'] = $ssltlsversion;
+}
 $location = "https://$paypaladdr/cgi-bin/webscr";
 $result = $c->post($location, $req, $options);
 
@@ -357,4 +361,69 @@ function enrol_paypal_ipn_exception_handler($ex) {
     error_log($logerrmsg);
 
     exit(0);
+}
+
+
+/**
+ * Compare version strings of for: ###.###.###A
+ *
+ * @return int 0 if versions are equal, -1 if testversion is less than base version,
+ *         1 if testversion is greater than baseversion.
+ */
+function enrol_paypal_version_compare($testversion, $baseversion) {
+    $testcomps = explode('.', $testversion);
+    $basecomps = explode('.', $baseversion);
+    foreach($basecomps as $key => $basecomp) {
+        if (!isset($testcomps[$key])) {
+            return -1;
+        }
+        if ($testcomps[$key] != $basecomp) {
+            return ($testcomps[$key] > $basecomp) ? 1 : -1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * Determine the correct CURLOPT_SSLVERSION to set for TLSv1.2 or what's available
+ * @param string the ssl_version string to test - from curl_version().
+ * @return bool|int The CURLOPT_SSLVERSION value to set, or false if none available.
+ */
+function enrol_paypal_get_tls_version($sslversion) {
+    // For $ssllibdata the keys are the case-insensitive regExp to match SSL library version.
+    static $ssllibdata = [
+        'openssl'           => ['1.2' => '1.0.1c'],
+        'nss'               => ['1.2' => '3.15'],
+        'gnu'               => ['1.2' => '1.7.1'],
+        'wolf'              => ['1.2' => '1.1.0'],
+        'cyn'               => ['1.2' => '1.1.0'],
+        'qso'               => ['1.2' => '7.1'],
+        'polar'             => ['1.2' => '1.2'],
+        'mbed'              => ['1.2' => '1.3.8'],
+        'secure.*channel'   => ['1.2' => '6.3.9600'],
+        'winssl'            => ['1.2' => '6.3.9600'],
+        'secure.*transport' => ['1.2' => '55471.14'],
+        'darwin'            => ['1.2' => '55471.14'],
+        'ax.*tls'           => [] // No TLSv1.2 support.
+    ];
+    if (!defined('CURLOPT_SSLVERSION_TLSv1')) {
+        define('CURLOPT_SSLVERSION_TLSv1', 1);
+    }
+    if (!defined('CURLOPT_SSLVERSION_TLSv1_2')) {
+        define('CURLOPT_SSLVERSION_TLSv1_2', 6);
+    }
+    if (!empty($sslversion)) {
+        foreach ($ssllibdata as $libkey => $data) {
+            if (preg_match("/{$libkey}/i", $sslversion)) {
+                $versionnum = preg_replace('/^[^0-9]*/', '', $sslversion);
+                if (isset($data['1.2']) && enrol_paypal_version_compare($versionnum, $data['1.2']) >= 0) {
+                    return CURLOPT_SSLVERSION_TLSv1_2;
+                } else {
+                    return CURLOPT_SSLVERSION_TLSv1;
+                }
+            }
+        }
+        return CURLOPT_SSLVERSION_TLSv1;
+    }
+    return false;
 }
